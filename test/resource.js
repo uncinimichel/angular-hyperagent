@@ -331,6 +331,65 @@ describe('Resource', function () {
                 q = _$q_;
             }));
 
+            describe('201 response', function () {
+                it('should get the resource from the locator header and fetch it again', function () {
+                    var responseMock1 = {
+                            status: 201,
+                            headers: jasmine.createSpy('A headers spy')
+                        },
+                        responseMock2 = {
+                            status: 200,
+                            data: 'Fetched resource'
+                        },
+                        agent = new HyperResource({
+                            url: 'http://itWillRedirect.com/',
+                            ajax: { headers: { 'X-Awesome': '23' }, cache: false }
+                        });
+
+                    responseMock1.headers.and.returnValue('http://aRedirect.com');
+                    spyOn(agent, '_load');
+
+                    agent.fetch();
+                    deferLoader.resolve(responseMock1);
+                    rootScope.$digest();
+                    deferLoader.resolve(responseMock2);
+                    rootScope.$digest();
+
+                    expect(agent._load).toHaveBeenCalledWith('Fetched resource');
+                    expect(responseMock1.headers).toHaveBeenCalledWith('location');
+                    expect(agent.loaded).toBe(true);
+                });
+                it('should stop redirect if more then 2 redirects', function () {
+                    var responseMock1 = {
+                            status: 201,
+                            headers: jasmine.createSpy('A headers spy')
+                        },
+                        result = null,
+                        agent = new HyperResource({
+                            url: 'http://itWillRedirect.com/',
+                            ajax: { headers: { 'X-Awesome': '23' }, cache: false }
+                        });
+
+                    responseMock1.headers.and.returnValue('http://aRedirect.com');
+                    spyOn(agent, '_load');
+                    agent.maxNumberOfRedirect = 2;
+
+                    agent.fetch().catch(function (msg) {
+                        result = msg;
+                    });
+                    deferLoader.resolve(responseMock1);
+                    rootScope.$digest();
+                    deferLoader.resolve(responseMock1);
+                    rootScope.$digest();
+                    deferLoader.resolve(responseMock1);
+                    rootScope.$digest();
+
+                    expect(result).toEqual('Exceed max number of redirects');
+                    expect(agent._load).not.toHaveBeenCalled();
+                    expect(agent.loaded).toBe(false);
+                });
+            });
+
             describe('204 response', function () {
                 var q;
 
@@ -446,8 +505,6 @@ describe('Resource', function () {
                 });
             });
         });
-
-
 
 
     });

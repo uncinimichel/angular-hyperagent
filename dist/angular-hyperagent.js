@@ -241,6 +241,8 @@ angular.module('hyperagent', []);
         this.warnings = {};
         this.curies = new HyperCurieStore();
 
+        this.maxNumberOfRedirect = 5;
+
         // Set up default loadHooks
         this._loadHooks = [
             this._loadLinks,
@@ -280,7 +282,8 @@ angular.module('hyperagent', []);
      *
      * Returns a promise on the this Resource instance.
      */
-    Resource.prototype.fetch = function fetch(options) {
+    Resource.prototype.fetch = function fetch(options, numberOfRedirect) {
+        numberOfRedirect = numberOfRedirect || 0;
         options = _.defaults(options || {}, { force: false });
 
         if (this.loaded && !options.force) {
@@ -303,17 +306,27 @@ angular.module('hyperagent', []);
         if (this.method) {
             ajaxOptions.method = this.method;
         }
-
         return hyperLoader(ajaxOptions).then(angular.bind(this, function _ajaxThen(response) {
-            if(response.status === 204){
+            if (response.status === 204) {
                 //skip loading for responses that have no body
                 return this;
-            }
-            this._load(response.data);
-            this.loaded = true;
+            } else if (response.status === 201) {
+                if (numberOfRedirect >= this.maxNumberOfRedirect) {
+                    return $q.reject('Exceed max number of redirects');
+                } else {
+                    this._options['url'] = response.headers('location');
+                    this.method = 'GET';
+                    return this.fetch(null, ++numberOfRedirect);
+                }
+            } else {
+                //If it is a redirect go and GET the redirect link.
+                this._load(response.data);
+                this.loaded = true;
 
-            // Return the agent back.
-            return this;
+                // Return the agent back.
+                return this;
+            }
+
         }));
     };
     /**
